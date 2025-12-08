@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>GLOBAL THERMONUCLEAR CHAT</title>
+
+  <!-- Leaflet map CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+
+  <style>
+    :root {
+      background-color: #000;
+      color: #33ff66;
+      font-family: "Courier New", monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: #000;
+    }
+
+    .crt-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0.3) 0px,
+        rgba(0, 0, 0, 0.3) 1px,
+        rgba(0, 0, 0, 0.0) 3px,
+        rgba(0, 0, 0, 0.0) 4px
+      );
+      mix-blend-mode: multiply;
+      z-index: 10;
+    }
+
+    .frame {
+      width: 90vw;
+      height: 90vh;
+      border: 1px solid #33ff66;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      background-color: #000;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .header {
+      border-bottom: 1px solid #33ff66;
+      padding-bottom: 4px;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      font-size: 12px;
+      letter-spacing: 2px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+    }
+
+    .header-title {
+      margin: 0;
+    }
+
+    .header-right {
+      font-size: 11px;
+      text-align: right;
+    }
+
+    .defcon {
+      font-weight: bold;
+    }
+
+    .defcon-level-5 { color: #33ff66; }
+    .defcon-level-4 { color: #7fff33; }
+    .defcon-level-3 { color: #ffff33; }
+    .defcon-level-2 { color: #ff9933; }
+    .defcon-level-1 { color: #ff3333; }
+
+    .layout {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 6px;
+      height: 100%;
+    }
+
+    .panel {
+      border: 1px solid #33ff66;
+      display: flex;
+      flex-direction: column;
+      font-size: 12px;
+    }
+
+    .panel-title {
+      border-bottom: 1px solid #33ff66;
+      padding: 4px 6px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    .panel-body {
+      flex: 1;
+      padding: 4px 6px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
+    .chat-line {
+      margin-bottom: 2px;
+    }
+
+    .chat-line.system {
+      color: #55ff88;
+    }
+
+    .chat-line.warn {
+      color: #ff9933;
+    }
+
+    .chat-meta {
+      color: #55ff88;
+    }
+
+    .chat-text {
+      color: #33ff66;
+    }
+
+    .chat-input-row {
+      border-top: 1px solid #33ff66;
+      padding: 4px 6px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .prompt {
+      font-weight: bold;
+    }
+
+    #chat-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #33ff66;
+      font: inherit;
+    }
+
+    #chat-input::placeholder {
+      color: #145f2a;
+    }
+
+    .cursor {
+      display: inline-block;
+      width: 8px;
+      animation: blink 1s steps(1) infinite;
+    }
+
+    @keyframes blink {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: 0; }
+    }
+
+    .footer-line {
+      margin-top: 4px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      opacity: 0.8;
+    }
+
+    /* Map look + CRT vibe */
+    .map-container {
+      width: 100%;
+      height: 100%;
+      border: 1px solid #33ff66;
+      /* Softer green tint */
+      filter:
+        grayscale(1)
+        sepia(1)
+        hue-rotate(80deg)
+        saturate(3)
+        brightness(0.9)
+        contrast(1.3);
+      background: #000;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .leaflet-container {
+      background: #000 !important;
+      font-family: "Courier New", monospace;
+    }
+
+    .leaflet-control-attribution,
+    .leaflet-control-zoom {
+      display: none !important;
+    }
+
+    /* Green glowing X marker */
+    @keyframes pulse {
+      0% { text-shadow: 0 0 4px #33ff66; }
+      50% { text-shadow: 0 0 8px #33ff66; }
+      100% { text-shadow: 0 0 4px #33ff66; }
+    }
+
+    .wargames-marker {
+      color: #33ff66;
+      font-size: 18px;
+      line-height: 18px;
+      transform: translate(-50%, -50%);
+      animation: pulse 2s infinite;
+    }
+
+    /* Radar sweep overlay */
+    #radar-sweep {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 160%;
+      height: 160%;
+      border-top: 1px solid rgba(51, 255, 102, 0.5);
+      border-radius: 50%;
+      transform-origin: 0 0;
+      pointer-events: none;
+      mix-blend-mode: screen;
+      animation: sweep 4s linear infinite;
+      opacity: 0.45;
+    }
+
+    @keyframes sweep {
+      0% {
+        transform: rotate(0deg) translate(-50%, -50%);
+      }
+      100% {
+        transform: rotate(360deg) translate(-50%, -50%);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="crt-overlay"></div>
+
+  <div class="frame">
+    <div class="header">
+      <div>
+        <h1 class="header-title">NORAD MAINFRAME / GLOBAL THERMONUCLEAR CHAT</h1>
+        <div>SYSTEM STATUS: ONLINE</div>
+      </div>
+      <div class="header-right">
+        <div>SIMULATION CORE: WOPR/SCENARIO-ENGINE</div>
+        <div id="defcon-display" class="defcon defcon-level-5">DEFCON: 5</div>
+      </div>
+    </div>
+
+    <div class="layout">
+      <!-- Chat / CLI panel -->
+      <div class="panel">
+        <div class="panel-title">TERMINAL LINK</div>
+        <div id="chat-log" class="panel-body">
+          INITIALIZING LINK...
+        </div>
+        <form id="chat-form" class="chat-input-row">
+          <span class="prompt">&gt;</span>
+          <input
+            id="chat-input"
+            type="text"
+            autocomplete="off"
+            placeholder="TYPE /HELP TO BEGIN..."
+          />
+          <span class="cursor">█</span>
+        </form>
+      </div>
+
+      <!-- Right panel: map + status -->
+      <div class="panel">
+        <div class="panel-title">GLOBAL DISPLAY</div>
+        <div class="panel-body" style="display: flex; flex-direction: column;">
+          <div id="map" class="map-container">
+            <!-- radar sweep overlay will be injected here -->
+          </div>
+
+          <div class="footer-line" id="status-line">
+            ACTIVE LINKS: 00
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+    <!-- Leaflet JS -->
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+
+  <!-- Socket.io client script served from the Node server -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    const chatLog = document.getElementById('chat-log');
+    const chatForm = document.getElementById('chat-form');
+    const chatInput = document.getElementById('chat-input');
+    const statusLine = document.getElementById('status-line');
+    const defconDisplay = document.getElementById('defcon-display');
+
+    let map;
+    let markersLayer;
+    let xIcon;
+
+    // --- GAME STATE -----------------------------------------------------------
+    let currentGame = null; // { start(), handleInput(text) }
+
+    // --- UTIL: append lines ---------------------------------------------------
+    function appendLine(text, kind = "normal") {
+      const line = document.createElement('div');
+      line.classList.add('chat-line');
+      if (kind === 'system') line.classList.add('system');
+      if (kind === 'warn') line.classList.add('warn');
+      line.textContent = text;
+      chatLog.appendChild(line);
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    // --- DEFCON ---------------------------------------------------------------
+    function setDefcon(level) {
+      level = Math.min(5, Math.max(1, level));
+      defconDisplay.textContent = 'DEFCON: ' + level;
+      defconDisplay.className = 'defcon defcon-level-' + level;
+    }
+
+    // --- MAP SETUP ------------------------------------------------------------
+    function initMap() {
+      if (map) return;
+
+      map = L.map('map', {
+        zoomControl: false,
+        attributionControl: false,
+        worldCopyJump: true
+      }).setView([20, 0], 2);
+
+      // Dark tiles, we tint them green via CSS filter
+      L.tileLayer(
+        'https://cartodb-basemaps-a.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png',
+        {
+          maxZoom: 6,
+          minZoom: 1
+        }
+      ).addTo(map);
+
+      markersLayer = L.layerGroup().addTo(map);
+
+      // Neon green "X" icon
+      xIcon = L.divIcon({
+        className: 'wargames-marker',
+        html: '✕',
+        iconSize: [18, 18],
+        iconAnchor: [9, 9]
+      });
+
+      // Radar sweep overlay
+      const mapEl = document.getElementById('map');
+      const sweep = document.createElement('div');
+      sweep.id = 'radar-sweep';
+      mapEl.appendChild(sweep);
+    }
+
+    function updateMarkers(users) {
+      if (!map) initMap();
+      markersLayer.clearLayers();
+
+      const coords = [];
+
+      users.forEach((u) => {
+        if (typeof u.lat !== 'number' || typeof u.lon !== 'number') return;
+
+        const lat = u.lat;
+        const lon = u.lon;
+        coords.push([lat, lon]);
+
+        const label = `${u.codename || 'LINK'}\n${u.city || ''}${u.city && u.country ? ', ' : ''}${u.country || ''}`;
+
+        const marker = L.marker([lat, lon], {
+          icon: xIcon
+        });
+
+        marker.bindPopup(label.replace('\n', '<br/>'));
+        markersLayer.addLayer(marker);
+      });
+
+      if (coords.length) {
+        const bounds = L.latLngBounds(coords);
+        map.fitBounds(bounds.pad(0.5));
+      }
+    }
+
+    // --- BOOT SEQUENCE --------------------------------------------------------
+    function runBootSequence() {
+      const lines = [
+        'NORAD MAINFRAME LINK ESTABLISHED.',
+        'LOADING WOPR STRATEGIC SCENARIO ENGINE...',
+        'SCANNING GLOBAL ROUTES........................OK',
+        'AUTHENTICATING TERMINAL........................OK',
+        'RESOLVING NODE LOCATION........................OK',
+        '',
+        'SYSTEM ONLINE.',
+        ''
+      ];
+
+      let idx = 0;
+      function next() {
+        if (idx < lines.length) {
+          appendLine(lines[idx], 'system');
+          idx++;
+          setTimeout(next, 400);
+        } else {
+          appendLine('TYPE /HELP TO LIST AVAILABLE COMMANDS.', 'system');
+        }
+      }
+      next();
+    }
+
+    // --- TIC-TAC-TOE GAME -----------------------------------------------------
+    function createTicTacToeGame() {
+      let board;
+      let gameOver;
+
+      function reset() {
+        board = Array(9).fill(null);
+        gameOver = false;
+      }
+
+      function drawBoard() {
+        const toChar = (i) => board[i] || (i + 1).toString();
+        const rows = [
+          ` ${toChar(0)} | ${toChar(1)} | ${toChar(2)} `,
+          "---+---+---",
+          ` ${toChar(3)} | ${toChar(4)} | ${toChar(5)} `,
+          "---+---+---",
+          ` ${toChar(6)} | ${toChar(7)} | ${toChar(8)} `,
+        ];
+        appendLine('');
+        rows.forEach((r) => appendLine(r));
+        appendLine('');
+      }
+
+      function checkWinner(b) {
+        const lines = [
+          [0, 1, 2],
+          [3, 4, 5],
+          [6, 7, 8],
+          [0, 3, 6],
+          [1, 4, 7],
+          [2, 5, 8],
+          [0, 4, 8],
+          [2, 4, 6],
+        ];
+        for (const [a, c, d] of lines) {
+          if (b[a] && b[a] === b[c] && b[a] === b[d]) return b[a];
+        }
+        if (b.every((cell) => cell)) return 'DRAW';
+        return null;
+      }
+
+      function aiMove() {
+        // simple AI: take first open spot
+        for (let i = 0; i < 9; i++) {
+          if (!board[i]) {
+            board[i] = 'O';
+            break;
+          }
+        }
+      }
+
+      function processMove(posStr) {
+        const pos = parseInt(posStr, 10);
+        if (Number.isNaN(pos) || pos < 1 || pos > 9) {
+          appendLine('ENTER A POSITION 1-9.');
+          return;
+        }
+        const idx = pos - 1;
+        if (board[idx]) {
+          appendLine('SQUARE ALREADY TAKEN.');
+          return;
+        }
+
+        board[idx] = 'X';
+        let result = checkWinner(board);
+        drawBoard();
+        if (result) {
+          if (result === 'DRAW') appendLine('GAME RESULT: DRAW.');
+          else appendLine(`WINNER: ${result}`);
+          gameOver = true;
+          appendLine('');
+          appendLine('TYPE PLAY TO START AGAIN OR EXIT TO RETURN.');
+          return;
+        }
+
+        // AI turn
+        aiMove();
+        result = checkWinner(board);
+        drawBoard();
+        if (result) {
+          if (result === 'DRAW') appendLine('GAME RESULT: DRAW.');
+          else appendLine(`WINNER: ${result}`);
+          gameOver = true;
+          appendLine('');
+          appendLine('TYPE PLAY TO START AGAIN OR EXIT TO RETURN.');
+          return;
+        }
+      }
+
+      function start() {
+        reset();
+        appendLine('TIC-TAC-TOE', 'system');
+        appendLine('', 'system');
+        appendLine('YOU ARE X. COMPUTER IS O.', 'system');
+        appendLine('ENTER A NUMBER (1-9) TO PLACE YOUR MARK.', 'system');
+        appendLine('TYPE EXIT TO LEAVE THE GAME.', 'system');
+        drawBoard();
+      }
+
+      function handleInput(raw) {
+        const trimmed = raw.trim();
+        const cmd = trimmed.toUpperCase();
+
+        if (cmd === 'EXIT' || cmd === '/EXIT' || cmd === 'QUIT') {
+          appendLine('EXITING TIC-TAC-TOE. RETURNING TO TERMINAL.', 'system');
+          currentGame = null;
+          return;
+        }
+
+        if (gameOver) {
+          if (cmd === 'PLAY') {
+            reset();
+            drawBoard();
+          } else {
+            appendLine('GAME OVER. TYPE PLAY OR EXIT.');
+          }
+          return;
+        }
+
+        processMove(trimmed);
+      }
+
+      return { start, handleInput };
+    }
+
+    // --- CLI COMMANDS ---------------------------------------------------------
+    function handleCommand(text) {
+      const parts = text.trim().split(/\s+/);
+      const cmd = parts[0].toLowerCase();
+      const args = parts.slice(1);
+
+      switch (cmd) {
+        case '/help':
+          appendLine('AVAILABLE COMMANDS:', 'system');
+          appendLine('  /help         - SHOW THIS HELP', 'system');
+          appendLine('  /chat         - ENTER GLOBAL CHAT', 'system');
+          appendLine('  /games        - LIST AVAILABLE WOPR SCENARIOS', 'system');
+          appendLine('  /settings     - TERMINAL SETTINGS (PLACEHOLDER)', 'system');
+          appendLine('  /defcon N     - SET SIMULATED DEFCON LEVEL (1-5)', 'system');
+          appendLine('  LAUNCH <NAME> - START A GAME (E.G. LAUNCH TIC-TAC-TOE)', 'system');
+          return true;
+
+        case '/chat':
+          appendLine('ENTERING GLOBAL CHAT CHANNEL...', 'system');
+          appendLine('MESSAGES WITHOUT "/" PREFIX WILL BE BROADCAST.', 'system');
+          return true;
+
+        case '/games':
+          appendLine('AVAILABLE WOPR SCENARIOS:', 'system');
+          appendLine('  CHESS (COMING SOON)', 'system');
+          appendLine('  CHECKERS (COMING SOON)', 'system');
+          appendLine('  BLACK JACK (COMING SOON)', 'system');
+          appendLine('  SOLITAIRE (COMING SOON)', 'system');
+          appendLine('  TIC-TAC-TOE', 'system');
+          appendLine('  GLOBAL THERMONUCLEAR WAR (SIMULATION, COMING SOON)', 'system');
+          appendLine('', 'system');
+          appendLine('TYPE:  "LAUNCH <NAME>"  TO START A SCENARIO.', 'system');
+          appendLine('EXAMPLE: LAUNCH TIC-TAC-TOE', 'system');
+          return true;
+
+        case '/settings':
+          appendLine('TERMINAL SETTINGS (PLACEHOLDER):', 'system');
+          appendLine('  - FUTURE: COLOR THEMES, SOUND FX, TEXT SPEED', 'system');
+          return true;
+
+        case '/defcon':
+          if (args.length === 0) {
+            appendLine('USAGE: /defcon N   (1 = NUCLEAR WAR, 5 = PEACE)', 'warn');
+            return true;
+          }
+          const level = parseInt(args[0], 10);
+          if (isNaN(level) || level < 1 || level > 5) {
+            appendLine('INVALID DEFCON LEVEL. USE 1-5.', 'warn');
+            return true;
+          }
+          setDefcon(level);
+          appendLine(`SIMULATION ALERT: DEFCON SET TO ${level}.`, 'system');
+          return true;
+
+        case 'launch': // user typed "LAUNCH ..." without slash
+        case '/launch':
+          const name = args.join(' ').toLowerCase();
+          if (!name) {
+            appendLine('USAGE: LAUNCH <NAME>. EXAMPLE: LAUNCH TIC-TAC-TOE', 'warn');
+            return true;
+          }
+
+          if (name === 'tic-tac-toe' || name === 'tic' || name === 'ttt') {
+            currentGame = createTicTacToeGame();
+            appendLine('INITIATING SCENARIO: TIC-TAC-TOE', 'system');
+            currentGame.start();
+            return true;
+          }
+
+          appendLine(`SCENARIO "${name.toUpperCase()}" NOT IMPLEMENTED YET.`, 'warn');
+          return true;
+
+        default:
+          appendLine(`UNKNOWN COMMAND: ${cmd}. TYPE /HELP FOR OPTIONS.`, 'warn');
+          return true;
+      }
+    }
+
+    // --- SOCKET HANDLERS ------------------------------------------------------
+    socket.on('chat-message', (msg) => {
+      const time = new Date(msg.timestamp).toLocaleTimeString();
+      const line = `[${time}] ${msg.codename}: ${msg.text}`;
+      appendLine(line);
+    });
+
+    socket.on('system-message', (text) => {
+      appendLine(`*** ${text} ***`, 'system');
+    });
+
+    socket.on('user-list', (users) => {
+      const count = users.length || 0;
+      statusLine.textContent =
+        'ACTIVE LINKS: ' + String(count).padStart(2, '0');
+      updateMarkers(users);
+    });
+
+    // Init map & boot sequence
+    window.addEventListener('load', () => {
+      initMap();
+      setDefcon(5);
+      runBootSequence();
+    });
+
+    // --- INPUT HANDLING -------------------------------------------------------
+    chatForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = chatInput.value.trim();
+      if (!text) return;
+
+      // If a game is active, send *all* input to it
+      if (currentGame) {
+        currentGame.handleInput(text);
+        chatInput.value = '';
+        return;
+      }
+
+      // No game: treat "/" as command, else global chat
+      if (text.startsWith('/')) {
+        handleCommand(text);
+      } else {
+        socket.emit('chat-message', text);
+      }
+
+      chatInput.value = '';
+    });
+  </script>
+</body>
+</html>
+
