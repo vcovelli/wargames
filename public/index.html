@@ -148,7 +148,7 @@
     .layout {
       flex: 1;
       display: grid;
-      grid-template-columns: 2fr 1fr;
+      grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
       gap: 6px;
       height: 100%;
     }
@@ -159,6 +159,7 @@
       flex-direction: column;
       font-size: 12px;
       transition: border-color 0.3s ease;
+      min-width: 0;
     }
 
     .panel-title {
@@ -173,11 +174,13 @@
       flex: 1;
       padding: 4px 6px;
       overflow-y: auto;
+      overflow-x: hidden;
       white-space: pre-wrap;
     }
 
     .chat-line {
       margin-bottom: 2px;
+      overflow-wrap: anywhere;
     }
 
     .chat-line.system {
@@ -194,6 +197,14 @@
 
     .chat-text {
       color: var(--primary);
+    }
+
+    #chat-log {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      overscroll-behavior: contain;
+      scrollbar-gutter: stable;
     }
 
     .chat-input-row {
