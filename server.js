@@ -11,6 +11,8 @@ const io = new Server(server);
 
 // Serve static files from /public
 app.use(express.static(path.join(__dirname, 'public')));
+// Serve front-end modules
+app.use('/comps', express.static(path.join(__dirname, 'comps')));
 
 // In-memory store of connected users
 // { [socketId]: { codename, ip, lat, lon, city, country } }
